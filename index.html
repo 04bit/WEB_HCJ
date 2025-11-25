@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>勤怠管理システム</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="main.js" defer></script>
+</head>
+
+<body>
+    <!-- ログイン画面 -->
+    <div id="loginScreen" class="auth-container">
+        <h1>勤怠管理システム</h1>
+        <div id="loginError" class="error-message"></div>
+        <form id="loginForm">
+            <div class="form-group">
+                <label>メールアドレス</label>
+                <input type="email" id="loginEmail" title="loginEmail" required>
+            </div>
+            <div class="form-group">
+                <label>パスワード</label>
+                <input type="password" id="loginPassword" title="loginPassword" required>
+            </div>
+            <button type="submit" class="btn btn-primary">ログイン</button>
+        </form>
+        <div class="switch-form">
+            アカウントをお持ちでない方は<a id="showRegister">新規登録</a>
+        </div>
+    </div>
+    <!-- 新規登録画面 -->
+    <div id="registerScreen" class="auth-container hidden">
+        <h1>新規登録</h1>
+        <div id="registerError" class="error-message"></div>
+        <div id="registerSuccess" class="success-message"></div>
+        <form id="registerForm">
+            <div class="form-group">
+                <label>氏名</label>
+                <input type="text" id="registerName" title="registerName" required>
+            </div>
+            <div class="form-group">
+                <label>メールアドレス</label>
+                <input type="email" id="registerEmail" title="registerEmail" required>
+            </div>
+            <div class="form-group">
+                <label>パスワード</label>
+                <input type="password" id="registerPassword" title="registerPassword" required minlength="6">
+            </div>
+            <div class="form-group">
+                <label>パスワード（確認）</label>
+                <input type="password" id="registerPasswordConfirm" title="registerPasswordConfirm" required>
+            </div>
+            <button type="submit" class="btn btn-primary">登録</button>
+        </form>
+        <div class="switch-form">
+            すでにアカウントをお持ちの方は<a id="showLogin">ログイン</a>
+        </div>
+    </div>
+</body>
+
+</html>
