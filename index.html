@@ -57,6 +57,106 @@
             すでにアカウントをお持ちの方は<a id="showLogin">ログイン</a>
         </div>
     </div>
+    <!-- メイン画面 -->
+    <div class="container hidden">
+        <!-- ヘッダー -->
+        <div class="header">
+            <h1>勤怠管理システム</h1>
+            <div class="user-info">
+                <span id="currentTime" class="current-time"></span>
+                <span></span>
+                <button class="logout-btn">ログアウト</button>
+            </div>
+        </div>
+        <!-- 打刻 -->
+        <div class="main-content">
+            <div class="card">
+                <h2>打刻</h2>
+                <div class="status-display">
+                    <p><strong>現在の状態</strong></p>
+                    <span class="status-badge off">退勤中</span>
+                    <p class="last-action">最後の打刻: なし</p>
+                </div>
+                <div class="clock-buttons">
+                    <button class="btn btn-success">出勤</button>
+                    <button class="btn btn-danger">退勤</button>
+                    <button class="btn btn-warning">休憩開始</button>
+                    <button class="btn btn-primary">休憩終了</button>
+                </div>
+            </div>
+            <div class="card">
+                <h2>本日の勤怠</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>種類</th>
+                            <th>時刻</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="2" class="loading">読み込み中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="summary-cards">
+            <div class="summary-card">
+                <h3>今月の勤務日数</h3>
+                <div class="value"></div>
+            </div>
+            <div class="summary-card">
+                <h3>今月の総労働時間</h3>
+                <div class="value"></div>
+            </div>
+            <div class="summary-card">
+                <h3>今月の平均労働時間</h3>
+                <div class="value"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>勤怠履歴</h2>
+            <div class="filter-section">
+                <input type="date">
+                <select>
+                    <option value="">月を選択</option>
+                    <option value="01">1月</option>
+                    <option value="02">2月</option>
+                    <option value="03">3月</option>
+                    <option value="04">4月</option>
+                    <option value="05">5月</option>
+                    <option value="06">6月</option>
+                    <option value="07">7月</option>
+                    <option value="08">8月</option>
+                    <option value="09">9月</option>
+                    <option value="10">10月</option>
+                    <option value="11">11月</option>
+                    <option value="12">12月</option>
+                </select>
+                <button class="btn btn-primary">絞り込み</button>
+                <button class="btn btn-secondary">リセット</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>日付</th>
+                        <th>出勤</th>
+                        <th>退勤</th>
+                        <th>休憩</th>
+                        <th>労働時間</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="5" class="loading">読み込み中...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </body>
 
 </html>
