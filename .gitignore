@@ -1,1 +1,4 @@
 .history
+.env
+node_modules
+package.json
