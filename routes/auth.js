@@ -1,5 +1,5 @@
 const express = require('express');
-const bycrypt = require('bcryptjs');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 
@@ -10,7 +10,7 @@ router.post('/register', async (req, res) => {
     const { name, email, password } = req.body;
     try {
         // Hash the password
-        const hashedPassword = await bycrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         // Insert the user into the database
         const [result] = await db.execute(
@@ -33,7 +33,7 @@ router.post('/register', async (req, res) => {
     }
 });
 
-
+// User login
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -47,7 +47,7 @@ router.post('/login', async (req, res) => {
         }
 
         const user = users[0];
-        const isPasswordValid = await bycrypt.compare(password, user.password);
+        const isPasswordValid = await bcrypt.compare(password, user.password);
 
         if (!isPasswordValid) {
             return res.status(401).json({ error: 'Invalid email or password' });
