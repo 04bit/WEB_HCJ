@@ -1,5 +1,5 @@
 // API Base URL
-const API_URL = 'http://localhost:59999/api';
+const API_URL = window.location.origin + '/api';
 
 // DOM Elements
 const loginScreen = document.getElementById('loginScreen');
@@ -78,6 +78,7 @@ function showMainScreen() {
     loadTodayAttendance();
     loadAttendanceHistory();
     updateSummary();
+    addExportButton();
 }
 
 // Event Listeners
@@ -103,6 +104,57 @@ clockButtons.forEach(btn => {
 
 filterBtn.addEventListener('click', handleFilter);
 resetBtn.addEventListener('click', handleReset);
+
+// データエクスポート機能
+function addExportButton() {
+    const filterSection = document.querySelector('.filter-section');
+    if (!filterSection) return;
+
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'btn btn-success';
+    exportBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        CSVエクスポート
+    `;
+    exportBtn.addEventListener('click', handleExport);
+    filterSection.appendChild(exportBtn);
+}
+
+async function handleExport() {
+    const month = filterMonth.value;
+    const year = filterDate.value ? new Date(filterDate.value).getFullYear() : '';
+
+    const params = new URLSearchParams();
+    if (month) params.append('month', month);
+    if (year) params.append('year', year);
+
+    try {
+        const response = await fetch(`${API_URL}/attendance/export?${params}`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (!response.ok) {
+            throw new Error('Export failed');
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `attendance_${year || 'all'}_${month || 'all'}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (error) {
+        alert('エクスポートに失敗しました');
+        console.error('Export error:', error);
+    }
+}
 
 // Auth Functions
 async function handleRegister(e) {
@@ -144,7 +196,8 @@ async function handleRegister(e) {
             showError(registerError, data.error || '登録に失敗しました');
         }
     } catch (error) {
-        showError(registerError, 'サーバーとの通信に失敗しました');
+        console.error('Register error:', error);
+        showError(registerError, 'サーバーとの通信に失敗しました。もう一度お試しください。');
     }
 }
 
@@ -174,7 +227,8 @@ async function handleLogin(e) {
             showError(loginError, data.error || 'ログインに失敗しました');
         }
     } catch (error) {
-        showError(loginError, 'サーバーとの通信に失敗しました');
+        console.error('Login error:', error);
+        showError(loginError, 'サーバーとの通信に失敗しました。接続を確認してください。');
     }
 }
 
@@ -226,7 +280,7 @@ async function handleClockAction(e) {
 function updateStatus(type) {
     currentStatus = type;
     statusBadge.className = 'status-badge';
-    
+
     if (type === '出勤') {
         statusBadge.classList.add('working');
         statusBadge.textContent = '勤務中';
@@ -263,7 +317,7 @@ async function loadTodayAttendance() {
                         <td>${detail.time}</td>
                     </tr>
                 `).join('');
-                
+
                 const lastDetail = data.details[data.details.length - 1];
                 updateStatus(lastDetail.type);
             }
@@ -326,8 +380,8 @@ async function updateSummary() {
 
             const monthRecords = data.records.filter(r => {
                 const recordDate = new Date(r.date);
-                return recordDate.getMonth() + 1 === currentMonth && 
-                       recordDate.getFullYear() === currentYear;
+                return recordDate.getMonth() + 1 === currentMonth &&
+                    recordDate.getFullYear() === currentYear;
             });
 
             const workDays = monthRecords.filter(r => r.clockIn).length;
@@ -345,11 +399,11 @@ async function updateSummary() {
 
 function handleFilter() {
     const filterParams = {};
-    
+
     if (filterDate.value) {
         filterParams.date = filterDate.value;
     }
-    
+
     if (filterMonth.value) {
         filterParams.month = filterMonth.value;
     }
