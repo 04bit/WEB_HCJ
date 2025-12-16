@@ -1,4 +1,6 @@
 // test-api.js - APIの動作確認用スクリプト
+require('dotenv').config();
+const PORT = process.env.PORT || 3306;
 const API_URL = 'http://127.0.0.1:3306/api';
 
 async function testAPI() {
