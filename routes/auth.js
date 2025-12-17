@@ -3,43 +3,27 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const authMiddleware = require('../middleware/auth');
+const logger = require('../config/logger');
 
 const router = express.Router();
 
-// バリデーション関数
-function validateEmail(email) {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
-}
-
-function validatePassword(password) {
-    return password && password.length >= 6;
-}
-
-// ユーザー登録
+// ユーザー登録（ロギング付き）
 router.post('/register', async (req, res) => {
     const { name, email, password } = req.body;
+    const startTime = Date.now();
+
+    logger.info('Registration attempt', { email, name });
 
     // バリデーション
     if (!name || !email || !password) {
+        logger.warn('Registration failed: Missing fields', { email });
         return res.status(400).json({
             error: '全ての項目を入力してください'
         });
     }
 
-    if (name.trim().length < 2) {
-        return res.status(400).json({
-            error: '氏名は2文字以上で入力してください'
-        });
-    }
-
-    if (!validateEmail(email)) {
-        return res.status(400).json({
-            error: '有効なメールアドレスを入力してください'
-        });
-    }
-
-    if (!validatePassword(password)) {
+    if (password.length < 6) {
+        logger.warn('Registration failed: Weak password', { email });
         return res.status(400).json({
             error: 'パスワードは6文字以上で入力してください'
         });
@@ -53,6 +37,7 @@ router.post('/register', async (req, res) => {
         );
 
         if (existing.length > 0) {
+            logger.warn('Registration failed: Email already exists', { email });
             return res.status(409).json({
                 error: 'このメールアドレスは既に登録されています'
             });
@@ -67,7 +52,12 @@ router.post('/register', async (req, res) => {
             [name.trim(), email.toLowerCase(), hashedPassword]
         );
 
-        console.log(`New user registered: ${email} (ID: ${result.insertId})`);
+        const duration = Date.now() - startTime;
+        logger.info('User registered successfully', {
+            userId: result.insertId,
+            email: email.toLowerCase(),
+            duration: `${duration}ms`
+        });
 
         res.status(201).json({
             success: true,
@@ -75,7 +65,11 @@ router.post('/register', async (req, res) => {
             userId: result.insertId
         });
     } catch (error) {
-        console.error('Registration error:', error);
+        logger.error('Registration error', {
+            error: error.message,
+            stack: error.stack,
+            email
+        });
 
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(409).json({
@@ -89,42 +83,36 @@ router.post('/register', async (req, res) => {
     }
 });
 
-// ログイン
+// ログイン（ロギング付き）
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
+    const startTime = Date.now();
+    const ip = req.ip;
 
-    // バリデーション
-    if (!email || !password) {
-        return res.status(400).json({
-            error: 'メールアドレスとパスワードを入力してください'
-        });
-    }
-
-    if (!validateEmail(email)) {
-        return res.status(400).json({
-            error: '有効なメールアドレスを入力してください'
-        });
-    }
+    logger.info('Login attempt', { email, ip });
 
     try {
-        // ユーザー検索
         const [users] = await db.query(
             'SELECT id, name, email, password FROM users WHERE email = ?',
             [email.toLowerCase()]
         );
 
         if (users.length === 0) {
+            logger.warn('Login failed: User not found', { email, ip });
             return res.status(401).json({
                 error: 'メールアドレスまたはパスワードが正しくありません'
             });
         }
 
         const user = users[0];
-
-        // パスワード検証
         const isPasswordValid = await bcrypt.compare(password, user.password);
 
         if (!isPasswordValid) {
+            logger.warn('Login failed: Invalid password', {
+                userId: user.id,
+                email,
+                ip
+            });
             return res.status(401).json({
                 error: 'メールアドレスまたはパスワードが正しくありません'
             });
@@ -132,18 +120,24 @@ router.post('/login', async (req, res) => {
 
         // JWTトークン生成
         const token = jwt.sign(
-            {
-                userId: user.id,
-                email: user.email
-            },
+            { userId: user.id, email: user.email },
             process.env.JWT_SECRET,
-            {
-                expiresIn: process.env.JWT_EXPIRES_IN || '24h',
-                issuer: 'attendance-system'
-            }
+            { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
         );
 
-        console.log(`User logged in: ${email} (ID: ${user.id})`);
+        // 最終ログイン時刻を更新
+        await db.query(
+            'UPDATE users SET last_login = NOW() WHERE id = ?',
+            [user.id]
+        );
+
+        const duration = Date.now() - startTime;
+        logger.info('Login successful', {
+            userId: user.id,
+            email,
+            ip,
+            duration: `${duration}ms`
+        });
 
         res.json({
             success: true,
@@ -156,74 +150,30 @@ router.post('/login', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Login error:', error);
+        logger.error('Login error', {
+            error: error.message,
+            stack: error.stack,
+            email,
+            ip
+        });
+
         res.status(500).json({
             error: 'サーバーエラーが発生しました'
         });
     }
 });
 
-// トークン検証（オプション）
-router.get('/verify', authMiddleware, async (req, res) => {
-    try {
-        const [users] = await db.query(
-            'SELECT id, name, email FROM users WHERE id = ?',
-            [req.userId]
-        );
-
-        if (users.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        res.json({
-            valid: true,
-            user: users[0]
-        });
-    } catch (error) {
-        console.error('Verify error:', error);
-        res.status(500).json({ error: 'Verification failed' });
-    }
-});
-
-// ログアウト（クライアント側でトークン削除）
+// ログアウト
 router.post('/logout', authMiddleware, (req, res) => {
-    console.log(`User logged out: ${req.userEmail} (ID: ${req.userId})`);
+    logger.info('User logged out', {
+        userId: req.userId,
+        email: req.userEmail
+    });
+
     res.json({
         success: true,
         message: 'ログアウトしました'
     });
-});
-
-// パスワードリセット（メール機能が必要）
-router.post('/forgot-password', async (req, res) => {
-    const { email } = req.body;
-
-    if (!email || !validateEmail(email)) {
-        return res.status(400).json({
-            error: '有効なメールアドレスを入力してください'
-        });
-    }
-
-    try {
-        const [users] = await db.query(
-            'SELECT id FROM users WHERE email = ?',
-            [email.toLowerCase()]
-        );
-
-        // セキュリティのため、ユーザーが存在しなくても同じレスポンスを返す
-        res.json({
-            success: true,
-            message: 'パスワードリセット用のメールを送信しました（実装予定）'
-        });
-
-        if (users.length > 0) {
-            // TODO: メール送信処理を実装
-            console.log(`Password reset requested for: ${email}`);
-        }
-    } catch (error) {
-        console.error('Forgot password error:', error);
-        res.status(500).json({ error: 'サーバーエラーが発生しました' });
-    }
 });
 
 module.exports = router;

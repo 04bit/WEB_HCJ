@@ -3,12 +3,21 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+const logger = require('./config/logger');
+const { requestLogger, errorLogger, performanceLogger } = require('./middleware/logging');
+
 const authRoutes = require('./routes/auth');
 const attendanceRoutes = require('./routes/attendance');
 const userRoutes = require('./routes/user');
 
 const app = express();
 const port = process.env.SERVER_PORT || 59999;
+
+logger.info('Starting application', {
+  nodeVersion: process.version,
+  environment: process.env.NODE_ENV || 'development',
+  port: port
+});
 
 // Trust proxy (for rate limiting behind reverse proxy)
 app.set('trust proxy', 1);
@@ -20,10 +29,10 @@ const corsOptions = {
       ? process.env.ALLOWED_ORIGINS.split(',')
       : ['http://localhost:59999', 'http://127.0.0.1:59999'];
 
-    // 開発環境では全てのオリジンを許可
     if (process.env.NODE_ENV === 'development' || !origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      logger.warn('CORS blocked', { origin });
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -36,7 +45,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// ボディパーサー（サイズ制限付き）
+// ボディパーサー
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -49,14 +58,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// リクエストログ（本番環境では適切なロギングライブラリを使用）
-if (process.env.NODE_ENV !== 'production') {
-  app.use((req, res, next) => {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] ${req.method} ${req.path}`);
-    next();
-  });
-}
+// ロギングミドルウェア
+app.use(requestLogger);
+app.use(performanceLogger(2000)); // 2秒以上かかるリクエストを警告
 
 // APIルート
 app.use('/api/auth', authRoutes);
@@ -65,13 +69,17 @@ app.use('/api/user', userRoutes);
 
 // ヘルスチェック
 app.get('/health', (req, res) => {
-  res.json({
+  const health = {
     status: 'OK',
     timestamp: new Date().toISOString(),
     port: port,
     environment: process.env.NODE_ENV || 'development',
-    uptime: process.uptime()
-  });
+    uptime: process.uptime(),
+    memory: process.memoryUsage()
+  };
+
+  logger.debug('Health check accessed', health);
+  res.json(health);
 });
 
 // 静的ファイル配信
@@ -80,13 +88,19 @@ app.use(express.static('.', {
   etag: true
 }));
 
-// ルートパスでindex.htmlを返す
+// ルートパス
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // 404エラー
 app.use((req, res) => {
+  logger.warn('404 Not Found', {
+    path: req.path,
+    method: req.method,
+    ip: req.ip
+  });
+
   res.status(404).json({
     error: 'Not Found',
     path: req.path,
@@ -95,9 +109,18 @@ app.use((req, res) => {
   });
 });
 
+// エラーロギング
+app.use(errorLogger);
+
 // グローバルエラーハンドリング
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  logger.error('Unhandled error', {
+    error: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+    userId: req.userId
+  });
 
   // JWTエラー
   if (err.name === 'UnauthorizedError') {
@@ -131,23 +154,57 @@ app.use((err, req, res, next) => {
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+  logger.info('SIGTERM signal received: closing HTTP server');
   server.close(() => {
-    console.log('HTTP server closed');
+    logger.info('HTTP server closed');
     process.exit(0);
   });
 });
 
+process.on('SIGINT', () => {
+  logger.info('SIGINT signal received: closing HTTP server');
+  server.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
+});
+
+// 未処理のPromiseリジェクション
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection', {
+    reason: reason,
+    promise: promise
+  });
+});
+
+// 未処理の例外
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception', {
+    error: error.message,
+    stack: error.stack
+  });
+  process.exit(1);
+});
+
 // サーバー起動
 const server = app.listen(port, () => {
-  console.log('='.repeat(50));
-  console.log(`🚀 ${process.env.APP_NAME || '勤怠管理システム'}`);
-  console.log(`📡 Server running on port ${port}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🏥 Health check: http://localhost:${port}/health`);
-  console.log(`🔌 API Base URL: http://localhost:${port}/api`);
-  console.log(`📄 Main page: http://localhost:${port}`);
-  console.log('='.repeat(50));
+  const startupMessage = [
+    '='.repeat(50),
+    `🚀 ${process.env.APP_NAME || '勤怠管理システム'}`,
+    `📡 Server running on port ${port}`,
+    `🌍 Environment: ${process.env.NODE_ENV || 'development'}`,
+    `🏥 Health check: http://localhost:${port}/health`,
+    `🔌 API Base URL: http://localhost:${port}/api`,
+    `📄 Main page: http://localhost:${port}`,
+    `📝 Logs directory: ./logs/`,
+    '='.repeat(50)
+  ].join('\n');
+
+  console.log(startupMessage);
+  logger.info('Server started successfully', {
+    port: port,
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 module.exports = app;
